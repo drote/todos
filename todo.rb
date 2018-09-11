@@ -4,7 +4,7 @@ require 'sinatra/content_for'
 require 'tilt/erubis'
 
 # Returns an error message if list name is invalid. Return nil otherwise.
-def error_for_list_name(name, old_name="")
+def error_for_list_name(name, old_name = '')
   if session[:lists].any? { |list| list[:name] == name && (name != old_name) }
     'The list name must be unique.'
   elsif !name.size.between?(1, 100)
@@ -14,9 +14,7 @@ end
 
 # Returns an error message if todo name is invalid. Return nil otherwise.
 def error_for_todo(name)
-  if !name.size.between?(1, 100)
-    'Todo must be between 1-100 characters.'
-  end
+  'Todo must be between 1-100 characters.' unless name.size.between?(1, 100)
 end
 
 # Returns the list object and the list number.
@@ -34,17 +32,16 @@ def get_todo_and_todo_num(list, todo_param)
 end
 
 def list_done?(list)
-  remaining_todos_count(list) == 0 && todos_count(list) > 0
+  remaining_todos_count(list).zero? && todos_count(list) > 0
 end
 
 helpers do
-
-  def list_class(list)  
-    "complete" if list_done?(list)
+  def list_class(list)
+    'complete' if list_done?(list)
   end
 
   def todo_class(todo)
-    "complete" if todo[:completed]
+    'complete' if todo[:completed]
   end
 
   def remaining_todos_count(list)
@@ -102,7 +99,6 @@ get '/lists/:list_number/edit' do
   erb :edit_list
 end
 
-
 # Create a new list
 post '/lists' do
   list_name = params[:list_name].strip
@@ -130,7 +126,9 @@ post '/lists/:list_number' do
     erb :edit_list
   else
     list[:name] = list_name
-    session[:success] = 'The list name been changed.' unless list_name == old_name
+    unless list_name == old_name
+      session[:success] = 'The list name been changed.'
+    end
 
     redirect "/lists/#{list_number}"
   end
@@ -142,7 +140,7 @@ post '/lists/:list_number/delete' do
   list_name = session[:lists].delete_at(list_number)[:name]
   session[:success] = "#{list_name} has been succesfuly deleted"
 
-  redirect "/lists"
+  redirect '/lists'
 end
 
 # Add new todo item
@@ -156,7 +154,7 @@ post '/lists/:list_number/todos' do
     erb :list_page
   else
     list[:todos] << { name: todo_text, completed: false }
-    session[:success] = "Todo added succesfuly"
+    session[:success] = 'Todo added succesfuly'
 
     redirect "/lists/#{list_number}"
   end
@@ -168,17 +166,17 @@ post '/lists/:list_number/todos/:todo_number/delete' do
   _, todo_number = get_todo_and_todo_num(list, params[:todo_number])
 
   list[:todos].delete_at(todo_number)
-  session[:success] = "Todo has been removed succesfuly"
+  session[:success] = 'Todo has been removed succesfuly'
 
   redirect "/lists/#{list_number}"
 end
 
 post '/lists/:list_number/todos/:todo_number/mark' do
   list, list_number = get_list_and_list_num(params[:list_number])
-  todo, _ = get_todo_and_todo_num(list, params[:todo_number])
+  todo, = get_todo_and_todo_num(list, params[:todo_number])
 
   todo[:completed] = (params[:completed] == 'true')
-  session[:success] = "Todo has been updated."
+  session[:success] = 'Todo has been updated.'
 
   redirect "/lists/#{list_number}"
 end
@@ -187,7 +185,7 @@ post '/lists/:list_number/complete_all' do
   list, list_number = get_list_and_list_num(params[:list_number])
 
   list[:todos].each { |todo| todo[:completed] = true }
-  session[:success] = "All todos have been completed."
+  session[:success] = 'All todos have been completed.'
 
   redirect "/lists/#{list_number}"
 end
