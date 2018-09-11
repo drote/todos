@@ -6,6 +6,6 @@ gem 'sinatra-contrib'
 
 ruby '2.4.1'
 
-group production do
+group :production do
   gem 'puma'
 end
