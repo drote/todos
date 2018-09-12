@@ -1,7 +1,7 @@
 <ul id="lists">
-	<% each_list_sorted_with_index(@lists) do |list, index| %>
+	<% lists_sorted(@lists).each do |list| %>
       <li class="<%= list_class(list) %>">
-  	  	<a href="/lists/<%= index %>">
+  	  	<a href="/lists/<%= list[:id] %>">
   	  	  <h2><%= list[:name] %></h2>
   	  	  <p><%= remaining_todos_count(list) %> / <%= todos_count(list) %></p>
   	  	</a>
