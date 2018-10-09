@@ -1,11 +1,27 @@
 require 'sinatra'
-require 'sinatra/reloader' if development?
 require 'sinatra/content_for'
 require 'tilt/erubis'
+require_relative 'database_persistence'
+
+configure do
+  enable :sessions
+  set :session_secret, 'secret'
+  set :erb, :escape_html => true
+  
+end
+
+configure(:development) do
+  require 'sinatra/reloader'
+  also_reload 'database_persistence.rb'
+end
+
+before do
+  @storage = DatabasePersistence.new(logger)
+end
 
 # Returns an error message if list name is invalid. Return nil otherwise.
 def error_for_list_name(name, old_name = '')
-  if session[:lists].any? { |list| list[:name] == name && (name != old_name) }
+  if @storage.all_lists.any? { |list| list[:name] == name && (name != old_name) }
     'The list name must be unique.'
   elsif !name.size.between?(1, 100)
     'The list name must be between 1-100 characters.'
@@ -18,25 +34,16 @@ def error_for_todo(name)
 end
 
 # Returns the list object and the list number.
-def fetch_list(list_param)
-  list = session[:lists].find { |list| list[:id] == list_param.to_i }
+def fetch_list(id)
+  list = @storage.find_list(id)
   return list if list
 
   session[:error] = "The specified list could not be found"
   redirect '/lists'
 end
 
-# Return the todo object and the todo number.
-def fetch_todo(todos, todo_param)
-  todos.find { |todo| todo[:id] == todo_param.to_i }
-end
-
 def list_done?(list)
   remaining_todos_count(list).zero? && todos_count(list) > 0
-end
-
-def next_id(list)
-  (list.map { |elem| elem[:id]}.max || 0) + 1
 end
 
 helpers do
@@ -65,15 +72,6 @@ helpers do
   end
 end
 
-configure do
-  enable :sessions
-  set :session_secret, 'secret'
-  set :erb, :escape_html => true
-end
-
-before do
-  session[:lists] ||= []
-end
 
 get '/' do
   redirect '/lists'
@@ -81,7 +79,7 @@ end
 
 # View all lists
 get '/lists' do
-  @lists = session[:lists]
+  @lists = @storage.all_lists
   erb :lists
 end
 
@@ -91,12 +89,12 @@ get '/lists/new' do
 end
 
 get '/lists/:list_id' do
-  @list = fetch_list(params[:list_id])
+  @list = fetch_list(params[:list_id].to_i)
   erb :list_page
 end
 
 get '/lists/:list_id/edit' do
-  @list = fetch_list(params[:list_id])
+  @list = fetch_list(params[:list_id].to_i)
   erb :edit_list
 end
 
@@ -109,8 +107,7 @@ post '/lists' do
     session[:error] = error
     erb :new_list
   else
-    id = next_id(session[:lists])
-    session[:lists] << { id: id, name: list_name, todos: [] }
+    @storage.create_new_list(list_name)
     session[:success] = 'The list has been created.'
     redirect '/lists'
   end
@@ -118,7 +115,8 @@ end
 
 # Update existing todo list
 post '/lists/:list_id' do
-  @list = fetch_list(params[:list_id])
+  list_id = params[:list_id].to_i
+  @list = fetch_list(list_id)
   new_name = params[:list_name].strip
   old_name = @list[:name]
   error = error_for_list_name(new_name, old_name)
@@ -127,21 +125,23 @@ post '/lists/:list_id' do
     session[:error] = error
     erb :edit_list
   else
-    @list[:name] = new_name
+    @storage.update_list_name(list_id, new_name)
+
     unless new_name == old_name
       session[:success] = 'The list name been changed.'
     end
 
-    redirect "/lists/#{@list[:id]}"
+    redirect "/lists/#{list_id}"
   end
 end
 
 # Delete list
 post '/lists/:list_id/delete' do
-  list = fetch_list(params[:list_id])
+  list_id = params[:list_id].to_i
+  list = fetch_list(list_id)
   deleted_list_name = list[:name]
 
-  session[:lists].delete(list)
+  @storage.delete_list(list_id)
   if env["HTTP_X_REQUESTED_WITH"] == "XMLHttpRequest"
     '/lists'
   else
@@ -152,7 +152,9 @@ end
 
 # Add new todo item
 post '/lists/:list_id/todos' do
-  @list = fetch_list(params[:list_id])
+  list_id = params[:list_id].to_i
+  @list = fetch_list(list_id)
+
   todo_text = params[:todo].strip
   error = error_for_todo(todo_text)
 
@@ -160,43 +162,44 @@ post '/lists/:list_id/todos' do
     session[:error] = error
     erb :list_page
   else
-    id = next_id(@list[:todos])
-    @list[:todos] << { id: id, name: todo_text, completed: false }
+    @storage.add_todo_item(list_id, todo_text)
     session[:success] = 'Todo added succesfuly'
 
-    redirect "/lists/#{@list[:id]}"
+    redirect "/lists/#{list_id}"
   end
 end
 
 # Remove a todo item
 post '/lists/:list_id/todos/:todo_id/delete' do
-  list = fetch_list(params[:list_id])
-  todo = fetch_todo(list[:todos], params[:todo_id])
+  list_id = params[:list_id].to_i
+  todo_id = params[:todo_id].to_i
 
-  list[:todos].delete(todo)
+  @storage.delete_todo_item(list_id, todo_id)
+
   if env["HTTP_X_REQUESTED_WITH"] == "XMLHttpRequest"
     status 204
   else
     session[:success] = 'Todo has been removed succesfuly'
-    redirect "/lists/#{list[:id]}"
+    redirect "/lists/#{list_id}"
   end
 end
 
 post '/lists/:list_id/todos/:todo_id/mark' do
-  list = fetch_list(params[:list_id])
-  todo = fetch_todo(list[:todos], params[:todo_id])
+  list_id = params[:list_id].to_i
+  todo_id = params[:todo_id].to_i
+  is_completed = params[:completed] == 'true'
 
-  todo[:completed] = (params[:completed] == 'true')
+  @storage.update_todo_status(list_id, todo_id, is_completed)
+
   session[:success] = 'Todo has been updated.'
-
-  redirect "/lists/#{list[:id]}"
+  redirect "/lists/#{list_id}"
 end
 
 post '/lists/:list_id/complete_all' do
-  list = fetch_list(params[:list_id])
+  list_id = params[:list_id].to_i
 
-  list[:todos].each { |todo| todo[:completed] = true }
+  @storage.mark_all_todos_as_completed(list_id)
+
   session[:success] = 'All todos have been completed.'
-
-  redirect "/lists/#{list[:id]}"
+  redirect "/lists/#{list_id}"
 end
