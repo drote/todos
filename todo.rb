@@ -19,6 +19,10 @@ before do
   @storage = DatabasePersistence.new(logger)
 end
 
+after do
+  @storage.disconnect
+end
+
 # Returns an error message if list name is invalid. Return nil otherwise.
 def error_for_list_name(name, old_name = '')
   if @storage.all_lists.any? { |list| list[:name] == name && (name != old_name) }
