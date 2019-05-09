@@ -3,7 +3,7 @@
     <h2><%= @list[:name] %></h2>
     <ul>
       
-      <% if remaining_todos_count(@list) >= 1 %>
+      <% if @list[:todos_remaining_count] >= 1 %>
         <li>
           <form action="/lists/<%= @list[:id] %>/complete_all" method="post">
             <button class="check" type="submit">Complete All</button>
@@ -18,7 +18,7 @@
   </header>
 
   <ul>
-    <% todos_sorted(@list[:todos]).each do |todo| %>
+    <% todos_sorted(@todos).each do |todo| %>
       <li class="<%= todo_class(todo) %>">
         <form action="/lists/<%= @list[:id] %>/todos/<%= todo[:id] %>/mark" method="post" class="check">
           <input type="hidden" name="completed" value="<%= !todo[:completed] %>" />

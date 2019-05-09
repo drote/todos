@@ -23,6 +23,24 @@ after do
   @storage.disconnect
 end
 
+helpers do
+  def list_class(list)
+    'complete' if list_done?(list)
+  end
+
+  def todo_class(todo)
+    'complete' if todo[:completed]
+  end
+
+  def lists_sorted(lists)
+    lists.sort_by { |list| list_done?(list) ? 1 : 0 }
+  end
+
+  def todos_sorted(todos)
+    todos.sort_by { |todo| todo[:completed] ? 1 : 0 }
+  end
+end
+
 # Returns an error message if list name is invalid. Return nil otherwise.
 def error_for_list_name(name, old_name = '')
   if @storage.all_lists.any? { |list| list[:name] == name && (name != old_name) }
@@ -47,35 +65,8 @@ def fetch_list(id)
 end
 
 def list_done?(list)
-  remaining_todos_count(list).zero? && todos_count(list) > 0
+  list[:todos_count] > 0 && list[:todos_remaining_count].zero?
 end
-
-helpers do
-  def list_class(list)
-    'complete' if list_done?(list)
-  end
-
-  def todo_class(todo)
-    'complete' if todo[:completed]
-  end
-
-  def remaining_todos_count(list)
-    list[:todos].count { |todo| !todo[:completed] }
-  end
-
-  def todos_count(list)
-    list[:todos].size
-  end
-
-  def lists_sorted(lists)
-    lists.sort_by { |list| list_done?(list) ? 1 : 0 }
-  end
-
-  def todos_sorted(todos)
-    todos.sort_by { |todo| todo[:completed] ? 1 : 0 }
-  end
-end
-
 
 get '/' do
   redirect '/lists'
@@ -93,7 +84,9 @@ get '/lists/new' do
 end
 
 get '/lists/:list_id' do
-  @list = fetch_list(params[:list_id].to_i)
+  list_id = params[:list_id].to_i
+  @list = fetch_list(list_id)
+  @todos = @storage.find_todos_for_list(list_id)
   erb :list_page
 end
 
